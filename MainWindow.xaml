@@ -9,9 +9,6 @@
         Title="ImageManipulator" Height="450" Width="800"
         x:Name="HeadWindow"
         Background="White">
-    <Window.Resources>
-
-    </Window.Resources>
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="200"/>
@@ -46,6 +43,7 @@
                 <Button Width="100" x:Name="RedoBtn" Click="RedoBtn_Click" IsEnabled="False">
                     <StackPanel>
                         <fa:FontAwesomeIcon SolidIcon="RedoAlt" FontSize="20" />
+                        
                         <TextBlock Text="Dalej"/>
                     </StackPanel>
                 </Button>

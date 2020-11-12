@@ -12,11 +12,44 @@ namespace ImageManipulator
     class HistoryService<T>
     {
         T CurrentState;
-        List<T> UndoStack;
-        List<T> RedoStack;
+        T[] UndoStack;
+        T[] RedoStack;
         private bool _lastCanRedo = false;
         private bool _lastCanUndo = false;
-        int Size;
+        private int Size;
+        private int _stateCount = 0;
+        private int _undoCount = 0;
+        private int _redoCount = 0;
+        private int StateCount
+        {
+            get => _stateCount;
+            set
+            {
+                if (value >= Size)
+                    _stateCount = value - Size;
+                else _stateCount = value;
+            }
+        }
+
+       
+        public int UndoCount
+        {
+            get => _undoCount;
+            private set
+            {
+                _undoCount = value;
+                OnPropertyChangeCanUndo();
+            }
+        }
+        public int RedoCount 
+        { 
+            get => _redoCount;
+            private set
+            {
+                _redoCount = value;
+                OnPropertyChangeCanRedo();
+            }
+        }
 
         public delegate void CanPropertyChanging(BoolArgs args);
         public event CanPropertyChanging CanUndoEvent;
@@ -26,7 +59,7 @@ namespace ImageManipulator
         { 
             get
             {
-                if (RedoStack.Count > 0)
+                if (RedoCount > 0)
                     return true;
                 return false;
             }
@@ -36,7 +69,7 @@ namespace ImageManipulator
         {
             get
             {
-                if (UndoStack.Count > 0)
+                if (UndoCount > 0)
                     return true;
                 return false;
             }
@@ -47,39 +80,36 @@ namespace ImageManipulator
         {
             this.CurrentState = CurrentState;
             Size = HistoryLength;
-            UndoStack = new List<T>();
-            RedoStack = new List<T>();
+            UndoStack = new T[HistoryLength];
+            RedoStack = new T[HistoryLength];
         }
 
         public void NewState(T entity)
         {
+            StateCount++;
             Set(UndoRedo.UNDO, CurrentState);
             CurrentState = entity;
         }
 
         public T Undo()
         {
-            var idx = UndoStack.Count - 1;
-            var entity = UndoStack[idx];
-            UndoStack.RemoveAt(idx);
+            UndoCount--;
+            var entity = UndoStack[UndoCount];
 
             Set(UndoRedo.REDO, CurrentState);
             CurrentState = entity;
 
-            OnPropertyChangeCanUndo();
             return entity;
         }
 
         public T Redo()
         {
-            var idx = RedoStack.Count - 1;
-            var entity = RedoStack[RedoStack.Count - 1];
-            RedoStack.RemoveAt(idx);
+            RedoCount--;
+            var entity = RedoStack[RedoCount];
 
             Set(UndoRedo.UNDO, CurrentState);
             CurrentState = entity;
 
-            OnPropertyChangeCanRedo();
             return entity;
         }
 
@@ -108,16 +138,19 @@ namespace ImageManipulator
         {
             if(undoRedo == UndoRedo.UNDO)
             {
-                if (UndoStack.Count + 1 >= Size)
-                    UndoStack.RemoveAt(0);
-                UndoStack.Add(entity);
+                if (UndoCount >= Size)
+                    UndoStack[StateCount] = entity;
+                else
+                {
+                    UndoStack[UndoCount] = entity;
+                    UndoCount++;
+                }
                 OnPropertyChangeCanUndo();
             }
             else
             {
-                if (RedoStack.Count + 1 >= Size)
-                    RedoStack.RemoveAt(0);
-                RedoStack.Add(entity);
+                RedoStack[RedoCount] = entity;
+                RedoCount++;
                 OnPropertyChangeCanRedo();
             }
                 

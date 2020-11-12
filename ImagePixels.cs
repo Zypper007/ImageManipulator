@@ -13,7 +13,7 @@ namespace ImageManipulator
     {
         readonly private int Width, Height, Stride, BPS;
         readonly private double DpiY, DpiX;
-        readonly private int[] Pixels;
+        readonly private short[] Pixels;
         private byte[] Bits;
         readonly private PixelFormat Format;
         readonly private BitmapPalette Palette;
@@ -43,11 +43,11 @@ namespace ImageManipulator
             Stride = source.Stride;
             Format = source.Format;
             Palette = source.Palette;
-            Pixels = new int[Stride * Height];
+            Pixels = new short[Stride * Height];
             source.Bits.CopyTo(Pixels, 0);
         }
 
-        static public byte IntToByte(int x)
+        static public byte ShortToByte(short x)
         {
             if (x >= 0 && x <= 255)
                 return (byte)x;
@@ -56,7 +56,7 @@ namespace ImageManipulator
             else return 255;
         }
 
-        public ImagePixels ForEachOnPixel(Func<IntARGB, IntARGB> func)
+        public ImagePixels ForEachOnPixel(Func<ShortARGB, ShortARGB> func)
         {
             var clone = new ImagePixels(this);
 
@@ -68,10 +68,10 @@ namespace ImageManipulator
 
         public BitmapSource ToBitmapSource()
         {
-            return ToBitmapSource(IntToByte);
+            return ToBitmapSource(ShortToByte);
         }
 
-        public BitmapSource ToBitmapSource(Func<int, byte> FromIntToByteConventer)
+        public BitmapSource ToBitmapSource(Func<short, byte> FromIntToByteConventer)
         {
             if (Bits == null)
             {
@@ -85,14 +85,14 @@ namespace ImageManipulator
             return img;
         }
 
-        private void ForEach(Func<IntARGB, IntARGB> func)
+        private void ForEach(Func<ShortARGB, ShortARGB> func)
         {
-            for (var y = 0; y < Height; y++)
-                for (var x = 0; x < Width; x++)
+            for (long y = 0; y < Height; y++)
+                for (long x = 0; x < Width; x++)
                     SetPixel(x, y, func(GetPixel(x, y)));
         }
 
-        private int CalcualteStep(int x, int y )
+        private long CalcualteStep(long x, long y )
         {
             // tutaj powinnien być switch z wyborem formatu ale ja się ograniczyłem tylko do ARGB
             // ile jest bajtów na pixel
@@ -105,13 +105,13 @@ namespace ImageManipulator
         }
 
 
-        private IntARGB GetPixel(int x, int y)
+        private ShortARGB GetPixel(long x, long y)
         {
             var step = CalcualteStep(x,y);
-            return new IntARGB(Pixels[step+3],Pixels[step+2],Pixels[step+1],Pixels[step]);
+            return new ShortARGB(Pixels[step+3],Pixels[step+2],Pixels[step+1],Pixels[step]);
         }
 
-        private void SetPixel(int x, int y, IntARGB color)
+        private void SetPixel(long x, long y, ShortARGB color)
         {
             var step = CalcualteStep(x, y);
     
@@ -124,18 +124,25 @@ namespace ImageManipulator
       
     }
 
-    struct IntARGB
+    struct ShortARGB
     {
-        public IntARGB(int A, int R, int G, int B)
+        public ShortARGB(short A, short R, short G, short B)
         {
             this.A = A;
             this.R = R;
             this.G = G;
             this.B = B;
         }
-        public int A { get; set; }
-        public int R { get; set; }
-        public int G { get; set; }
-        public int B { get; set; }
+        public ShortARGB(int A, int R, int G, int B)
+        {
+            this.A = (short)A;
+            this.R = (short)R;
+            this.G = (short)G;
+            this.B = (short)B;
+        }
+        public short A { get; set; }
+        public short R { get; set; }
+        public short G { get; set; }
+        public short B { get; set; }
     }
 }
