@@ -1,5 +1,4 @@
-﻿using Meziantou.WpfFontAwesome;
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -7,16 +6,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Reactive;
 using System.Reactive.Subjects;
@@ -39,14 +33,19 @@ namespace ImageManipulator
                 _subject.OnNext(value.CurrentState);
             }
         }
+
+        // Łatwiejsze gettery
+        private ImagePixels imagePixels => History.CurrentState.Item1;
+        private ImageStatistic imageStatistic => History.CurrentState.Item2;
+
+        // Funkcja ułatwiająca dodawanie nowych elementów
         private void PushNewState(Tuple<ImagePixels, ImageStatistic> t)
         {
             History.NewState(t);
             _subject.OnNext(t);
         }
 
-
-
+        // Zostosowanie wzorca Obserwator
         Subject<Tuple<ImagePixels, ImageStatistic>> _subject;
         IObserver<Tuple<ImagePixels, ImageStatistic>> _observer;
 
@@ -66,6 +65,7 @@ namespace ImageManipulator
 
         private double lastContrastValue = 0;
         private double lastBrithnessValue = 0;
+        // ostatnia lokalizacja pliku;
         private string pathToFile = string.Empty;
         #endregion
 
@@ -77,9 +77,7 @@ namespace ImageManipulator
             _observer = Observer.Create<Tuple<ImagePixels, ImageStatistic>>( (x) => 
             {
                 Dispatcher.Invoke(() => { 
-                    // Przypisanie nowego obrazu
                     ImgControl.Source = x.Item1.ToBitmapSource();
-                    // Stworzenie histogramu
                     DrawHistogram(x.Item2.Histogram);
                     Processing = false;
                 });
@@ -88,7 +86,7 @@ namespace ImageManipulator
             _subject.Subscribe(_observer);  
         }
 
-        #region brownFile
+        #region FileBrowse
         private void BrowserBtn_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog OpenDialog = new OpenFileDialog();
@@ -98,10 +96,17 @@ namespace ImageManipulator
 
             if (OpenDialog.ShowDialog() == true)
             {
-                pathToFile = OpenDialog.FileName;
-                FilePathLabel.Content = OpenDialog.FileName;
-                HistogramCanvas.Children.Clear();
                 Processing = true;
+                pathToFile = OpenDialog.FileName;
+
+                // zerowanie zmiennych
+                lastContrastValue = 0;
+                lastBrithnessValue = 0;
+                SliderJasnosc.Value = 0;
+                SliderKontrast.Value = 0;
+                HistogramCanvas.Children.Clear();
+                FilePathLabel.Content = OpenDialog.FileName;
+
                 Task.Run(() =>
                 {
                     var img = new BitmapImage(new Uri(OpenDialog.FileName));
@@ -109,18 +114,15 @@ namespace ImageManipulator
 
                     var imagePixels = new ImagePixels(img);
                     var statistic = new ImageStatistic(imagePixels);
+                    var tuple = new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic);
+
                     if (History == null)
                     {
-                        History = new HistoryService<Tuple<ImagePixels, ImageStatistic>>(new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic), 20);
+                        History = new HistoryService<Tuple<ImagePixels, ImageStatistic>>(tuple, 20);
                         History.CanUndoEvent += History_CanUndoEvent;
                         History.CanRedoEvent += History_CanRedoEvent;
                     }
-                    else PushNewState(new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic));
-                    Dispatcher.Invoke(() =>
-                    {
-                        SliderJasnosc.Value = 0;
-                        SliderKontrast.Value = 0;
-                    });
+                    else PushNewState(tuple);
                 });
             }
         }
@@ -160,6 +162,17 @@ namespace ImageManipulator
             ImageManipulation(fn);
             lastContrastValue = value;
         }
+
+        // Funkcja ułatwiająca wywoływanie zadań asynchronicznych z manipulowaniem obrazu
+        private void ImageManipulation(Func<ShortARGB, ShortARGB> manipulator)
+        {
+            Processing = true;
+            Task.Run(() => {
+                var imgPx = imagePixels.ForEachOnPixel(manipulator);
+                var statistic = new ImageStatistic(imagePixels);
+                PushNewState(new Tuple<ImagePixels, ImageStatistic>(imgPx, statistic));
+            });
+        }
         #endregion
 
         #region HistoryService
@@ -190,24 +203,16 @@ namespace ImageManipulator
         }
         #endregion
 
-        private void ImageManipulation(Func<ShortARGB, ShortARGB> manipulator)
-        {
-            Processing = true;
-            Task.Run(() => {
-                var imagePixels = History.CurrentState.Item1.ForEachOnPixel(manipulator);
-                var statistic = new ImageStatistic(imagePixels);
-                PushNewState(new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic));
-            });
-        }
 
         private void HistogramChanel_Checked(object sender, RoutedEventArgs e)
         {
             if (History == null)
                 return;
             
-            DrawHistogram(History.CurrentState.Item2.Histogram);
+            DrawHistogram(imageStatistic.Histogram);
         }
 
+        #region DrawingFinction
         private void DrawHistogram(BitmapHistogram histogram)
         {
             HistogramCanvas.Children.Clear();
@@ -263,5 +268,6 @@ namespace ImageManipulator
 
             return poly;
         }
+        #endregion
     }
 }
