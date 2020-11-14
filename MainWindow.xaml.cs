@@ -18,6 +18,8 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using System.Reactive;
+using System.Reactive.Subjects;
 
 namespace ImageManipulator
 {
@@ -27,10 +29,30 @@ namespace ImageManipulator
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         #region Property
-        ImagePixels imagePixels;
-        HistoryService<ImagePixels> history;
+        HistoryService<Tuple<ImagePixels, ImageStatistic>> _history;
+        HistoryService<Tuple<ImagePixels, ImageStatistic>> History
+        {
+            get => _history;
+            set
+            {
+                _history = value;
+                _subject.OnNext(value.CurrentState);
+            }
+        }
+        private void PushNewState(Tuple<ImagePixels, ImageStatistic> t)
+        {
+            History.NewState(t);
+            _subject.OnNext(t);
+        }
+
+
+
+        Subject<Tuple<ImagePixels, ImageStatistic>> _subject;
+        IObserver<Tuple<ImagePixels, ImageStatistic>> _observer;
+
 
         public event PropertyChangedEventHandler PropertyChanged;
+        private void OnPropChanged([CallerMemberName] string PropName = "") => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(PropName));
         private bool _Processing = false;
         public bool Processing
         {
@@ -41,13 +63,29 @@ namespace ImageManipulator
                 OnPropChanged();
             }
         }
-    
+
+        private double lastContrastValue = 0;
+        private double lastBrithnessValue = 0;
         private string pathToFile = string.Empty;
         #endregion
 
         public MainWindow()
         {
             InitializeComponent();
+
+            _subject = new Subject<Tuple<ImagePixels, ImageStatistic>>();
+            _observer = Observer.Create<Tuple<ImagePixels, ImageStatistic>>( (x) => 
+            {
+                Dispatcher.Invoke(() => { 
+                    // Przypisanie nowego obrazu
+                    ImgControl.Source = x.Item1.ToBitmapSource();
+                    // Stworzenie histogramu
+                    DrawHistogram(x.Item2.Histogram);
+                    Processing = false;
+                });
+            });
+
+            _subject.Subscribe(_observer);  
         }
 
         #region brownFile
@@ -62,21 +100,26 @@ namespace ImageManipulator
             {
                 pathToFile = OpenDialog.FileName;
                 FilePathLabel.Content = OpenDialog.FileName;
+                HistogramCanvas.Children.Clear();
                 Processing = true;
                 Task.Run(() =>
                 {
                     var img = new BitmapImage(new Uri(OpenDialog.FileName));
                     img.Freeze();
 
-                    imagePixels = new ImagePixels(img);
-                    history = new HistoryService<ImagePixels>(imagePixels, 20);
-                    history.CanRedoEvent += History_CanRedoEvent;
-                    history.CanUndoEvent += History_CanUndoEvent;
-
+                    var imagePixels = new ImagePixels(img);
+                    var statistic = new ImageStatistic(imagePixels);
+                    if (History == null)
+                    {
+                        History = new HistoryService<Tuple<ImagePixels, ImageStatistic>>(new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic), 20);
+                        History.CanUndoEvent += History_CanUndoEvent;
+                        History.CanRedoEvent += History_CanRedoEvent;
+                    }
+                    else PushNewState(new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic));
                     Dispatcher.Invoke(() =>
                     {
-                        ImgControl.Source = imagePixels.ToBitmapSource();
-                        Processing = false;
+                        SliderJasnosc.Value = 0;
+                        SliderKontrast.Value = 0;
                     });
                 });
             }
@@ -86,98 +129,50 @@ namespace ImageManipulator
         #region EditActions
         private void InvertBtn_Click(object sender, RoutedEventArgs e)
         {
-            Processing = true;
-            Task.Run(() => {
-                imagePixels = imagePixels.ForEachOnPixel(InvertColor);
-                history.NewState(imagePixels);
-                var img = imagePixels.ToBitmapSource((x)=> (byte)x);
-
-                Dispatcher.Invoke(() => {
-                    ImgControl.Source = img;
-                    Processing = false;
-                });
-            });
+            ImageManipulation(ImageFunctions.InvertColor);
         }
 
 
         private void GrayScale1Btn_Click(object sender, RoutedEventArgs e)
         {
-            Processing = true;
-            Task.Run(() => {
-                imagePixels = imagePixels.ForEachOnPixel(GrayScale1);
-                history.NewState(imagePixels);
-                var img = imagePixels.ToBitmapSource();
-
-                Dispatcher.Invoke(() => {
-                    ImgControl.Source = img;
-                    Processing = false;
-                });
-            });
+            ImageManipulation(ImageFunctions.GrayScale1);
         }
 
         private void GrayScale2Btn_Click(object sender, RoutedEventArgs e)
         {
-            Processing = true;
-            Task.Run(() => {
-                imagePixels = imagePixels.ForEachOnPixel(GrayScale2);
-                history.NewState(imagePixels);
-                var img = imagePixels.ToBitmapSource();
-
-                Dispatcher.Invoke(() => {
-                    ImgControl.Source = img;
-                    Processing = false;
-                });
-            });
+            ImageManipulation(ImageFunctions.GrayScale2);
         }
 
         private void SliderJasnosc_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
-            Processing = true;
-            var value = (short)Math.Round((sender as Slider).Value);
-            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => Brightness(x, value);
-
-            Task.Run(() => {
-                imagePixels = imagePixels.ForEachOnPixel(fn);
-                history.NewState(imagePixels);
-                var img = imagePixels.ToBitmapSource();
-
-                Dispatcher.Invoke(() => {
-                    ImgControl.Source = img;
-                    Processing = false;
-                });
-            });
+            var value = Math.Round((sender as Slider).Value);
+            var brith_val = (short)Math.Round(value - lastBrithnessValue);
+            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => ImageFunctions.Brightness(x, brith_val);
+            ImageManipulation(fn);
+            lastBrithnessValue = value;
         }
 
         private void SliderKontrast_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
-            Processing = true;
-            var value = (short)Math.Round((sender as Slider).Value);
-            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => Contrast(x, value);
-
-            Task.Run(() => {
-                imagePixels = imagePixels.ForEachOnPixel(fn);
-                history.NewState(imagePixels);
-                var img = imagePixels.ToBitmapSource();
-
-                Dispatcher.Invoke(() => {
-                    ImgControl.Source = img;
-                    Processing = false;
-                });
-            });
+            var value = (sender as Slider).Value;
+            var contr_val = (short)Math.Round(value- lastContrastValue);
+            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => ImageFunctions.Contrast(x, contr_val);
+            ImageManipulation(fn);
+            lastContrastValue = value;
         }
         #endregion
 
         #region HistoryService
         private void RedoBtn_Click(object sender, RoutedEventArgs e)
         {
-            var img = history.Redo();
-            ImgControl.Source = img.ToBitmapSource();
+             var redo = History.Redo();
+            _subject.OnNext(redo);
         }
 
         private void UndoBtn_Click(object sender, RoutedEventArgs e)
         {
-            var img = history.Undo();
-            ImgControl.Source = img.ToBitmapSource();
+            var undo = History.Undo();
+            _subject.OnNext(undo);
         }
 
         private void History_CanUndoEvent(BoolArgs args)
@@ -195,45 +190,78 @@ namespace ImageManipulator
         }
         #endregion
 
-        private void OnPropChanged([CallerMemberName] string PropName = "")
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(PropName));
-
-        #region ImageMethod
-        private ShortARGB Contrast(ShortARGB color, short value)
+        private void ImageManipulation(Func<ShortARGB, ShortARGB> manipulator)
         {
-            if (color.R + color.G + color.B > 382.5)
-                return new ShortARGB(color.A, color.R + value, color.G + value, color.B + value);
-            return new ShortARGB(color.A, color.R - value, color.G - value, color.B - value);
+            Processing = true;
+            Task.Run(() => {
+                var imagePixels = History.CurrentState.Item1.ForEachOnPixel(manipulator);
+                var statistic = new ImageStatistic(imagePixels);
+                PushNewState(new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic));
+            });
         }
 
-        private ShortARGB Brightness(ShortARGB color, short value) 
-            => new ShortARGB(color.A, color.R + value, color.G + value, color.B + value);
-
-        private ShortARGB GrayScale2(ShortARGB colorInput)
+        private void HistogramChanel_Checked(object sender, RoutedEventArgs e)
         {
-            var R = (int)Math.Round(colorInput.R * 0.299);
-            var G = (int)Math.Round(colorInput.G * 0.587);
-            var B = (int)Math.Round(colorInput.G * 0.114);
-            var gray = R + G + B;
-
-            return new ShortARGB(colorInput.A, gray, gray, gray);
+            if (History == null)
+                return;
+            
+            DrawHistogram(History.CurrentState.Item2.Histogram);
         }
 
-        private ShortARGB GrayScale1(ShortARGB colorInput)
+        private void DrawHistogram(BitmapHistogram histogram)
         {
-            var gray = (int)Math.Round((colorInput.R + colorInput.G + colorInput.B) / 3f);
+            HistogramCanvas.Children.Clear();
+            
+            var widthScale = HistogramCanvas.ActualWidth / 256;
+            var max = histogram.R.Concat(histogram.G.Concat(histogram.B)).Max();
+            var heightScale = HistogramCanvas.ActualHeight / max;
 
-            return new ShortARGB(colorInput.A, gray, gray, gray);
+            if(HistogramChanelAchbx.IsChecked == true)
+                HistogramCanvas.Children.Add(
+                    DrawPoligon(
+                        ArrayIntToPoints(histogram.A, widthScale, heightScale), 
+                        Colors.LightGray));
+
+            if (HistogramChanelBchbx.IsChecked == true)
+                HistogramCanvas.Children.Add(
+                    DrawPoligon(
+                        ArrayIntToPoints(histogram.B, widthScale, heightScale),
+                        Colors.Blue));
+
+            if (HistogramChanelGchbx.IsChecked == true)
+                HistogramCanvas.Children.Add(
+                    DrawPoligon(
+                        ArrayIntToPoints(histogram.G, widthScale, heightScale),
+                        Colors.Green));
+
+            if (HistogramChanelRchbx.IsChecked == true)
+                HistogramCanvas.Children.Add(
+                    DrawPoligon(
+                        ArrayIntToPoints(histogram.R, widthScale, heightScale),
+                        Colors.Red));
         }
 
-        private ShortARGB InvertColor(ShortARGB colorInput)
+        private ICollection<Point> ArrayIntToPoints(int[] Data, double ScaleWidth =1, double ScaleHeight =1)
         {
+            var points = new List<Point>();
+            for (var i = 0; i < Data.Length; i++)
+                points.Add(new Point(i * ScaleWidth, Data[i] * ScaleHeight));
 
-            return new ShortARGB(colorInput.A, 
-                255 - ImagePixels.ShortToByte(colorInput.R), 
-                255 - ImagePixels.ShortToByte(colorInput.G), 
-                255 - ImagePixels.ShortToByte(colorInput.B));
+            return points;
         }
-        #endregion
+
+        private Polygon DrawPoligon(ICollection<Point> Data, Color color)
+        {
+            var poly = new Polygon();
+            poly.Stroke = new SolidColorBrush(color);
+            poly.Fill = new SolidColorBrush(Color.FromArgb(64, color.R, color.G, color.B));
+
+            poly.Points.Add(new Point(0,0));
+            foreach (var d in Data)
+                poly.Points.Add(d);
+            poly.Points.Add(new Point(Data.Last().X, 0));
+
+            return poly;
+        }
     }
 }

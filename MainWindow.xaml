@@ -11,7 +11,7 @@
         Background="White">
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="250"/>
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
@@ -34,26 +34,26 @@
         </Border>
         <DockPanel Grid.Row="1">
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Bottom">
-                <Button Width="100" x:Name="UndoBtn" Click="UndoBtn_Click" IsEnabled="False">
+                <Button Width="125" x:Name="UndoBtn" Click="UndoBtn_Click" IsEnabled="False">
                     <StackPanel>
                         <fa:FontAwesomeIcon SolidIcon="UndoAlt" FontSize="20" />
                         <TextBlock Text="Wstecz"/>
                     </StackPanel>
                 </Button>
-                <Button Width="100" x:Name="RedoBtn" Click="RedoBtn_Click" IsEnabled="False">
+                <Button Width="125" x:Name="RedoBtn" Click="RedoBtn_Click" IsEnabled="False">
                     <StackPanel>
                         <fa:FontAwesomeIcon SolidIcon="RedoAlt" FontSize="20" />
-                        
+
                         <TextBlock Text="Dalej"/>
                     </StackPanel>
                 </Button>
             </StackPanel>
             <ScrollViewer>
                 <StackPanel >
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,20">
-                        <Button x:Name="InvertBtn" Content="Odwróć" Click="InvertBtn_Click" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Width="60"/>
-                        <Button x:Name="GrayScale1Btn" Content="Szarość 1" Click="GrayScale1Btn_Click" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Width="60"/>
-                        <Button x:Name="GrayScale2Btn" Content="Szarość 2" Click="GrayScale2Btn_Click" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Width="60"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,20" HorizontalAlignment="Center">
+                        <Button x:Name="InvertBtn" Content="Odwróć" Click="InvertBtn_Click" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Width="76"/>
+                        <Button x:Name="GrayScale1Btn" Content="Szarość 1" Click="GrayScale1Btn_Click" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Width="76"/>
+                        <Button x:Name="GrayScale2Btn" Content="Szarość 2" Click="GrayScale2Btn_Click" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Width="76"/>
                     </StackPanel>
 
                     <Label Content="Jasność"/>
@@ -61,6 +61,26 @@
 
                     <Label Content="Kontrast"/>
                     <Slider x:Name="SliderKontrast" Maximum="255" Minimum="-255" IsSnapToTickEnabled="True" TickFrequency="1" Thumb.DragCompleted="SliderKontrast_DragCompleted" IsEnabled="{Binding ElementName=HeadWindow, Path=Processing}" Margin="0,0,0,20" />
+
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Histogram" Margin="0,0,30,0"/>
+                        <CheckBox IsChecked="True" Content="R" x:Name="HistogramChanelRchbx" FontWeight="Bold" Margin="4,0" FlowDirection="RightToLeft" Checked="HistogramChanel_Checked" Unchecked="HistogramChanel_Checked" />
+                        <CheckBox IsChecked="True" Content="G" x:Name="HistogramChanelGchbx" FontWeight="Bold" Margin="4,0" FlowDirection="RightToLeft" Checked="HistogramChanel_Checked" Unchecked="HistogramChanel_Checked" />
+                        <CheckBox IsChecked="True" Content="B" x:Name="HistogramChanelBchbx" FontWeight="Bold" Margin="4,0" FlowDirection="RightToLeft" Checked="HistogramChanel_Checked" Unchecked="HistogramChanel_Checked" />
+                        <CheckBox IsChecked="False" Content="A" x:Name="HistogramChanelAchbx" FontWeight="Bold" Margin="4,0,1,0" FlowDirection="RightToLeft" Checked="HistogramChanel_Checked" Unchecked="HistogramChanel_Checked" />
+                    </StackPanel>
+                    <Border BorderThickness="2" BorderBrush="#FFCFCFCF" Margin="2">
+                        <Canvas Height="100" Name="HistogramCanvas" Margin="2" RenderTransformOrigin="0.5,0.5">
+                            <Canvas.RenderTransform>
+                                <TransformGroup>
+                                    <ScaleTransform ScaleY="1" ScaleX="-1"/>
+                                    <SkewTransform AngleY="0" AngleX="0"/>
+                                    <RotateTransform Angle="180"/>
+                                    <TranslateTransform/>
+                                </TransformGroup>
+                            </Canvas.RenderTransform>
+                        </Canvas>
+                    </Border>
                 </StackPanel>
             </ScrollViewer>
         </DockPanel>

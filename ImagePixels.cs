@@ -15,10 +15,10 @@ namespace ImageManipulator
         readonly private double DpiY, DpiX;
         readonly private short[] Pixels;
         private byte[] Bits;
-        readonly private PixelFormat Format;
-        readonly private BitmapPalette Palette;
+        readonly public PixelFormat Format;
+        readonly public BitmapPalette Palette;
 
-
+        // Konstruktor z BitmapySource
         public ImagePixels(BitmapSource imgSrc)
         {
             Width = imgSrc.PixelWidth;
@@ -33,6 +33,8 @@ namespace ImageManipulator
             imgSrc.CopyPixels(Bits, Stride, 0);
         }
 
+
+        // Konstruktor Kopiujący
         public ImagePixels(ImagePixels source)
         {
             Width = source.Width;
@@ -47,30 +49,42 @@ namespace ImageManipulator
             source.Bits.CopyTo(Pixels, 0);
         }
 
+
+        // Metoda do zmiany short na byte z ucinaniem wartosci poza zakresem 
         static public byte ShortToByte(short x)
         {
-            if (x >= 0 && x <= 255)
-                return (byte)x;
             if (x < 0)
                 return 0;
-            else return 255;
+            if (x > 255)
+                return 255;
+            return (byte)x;
+
         }
 
+        // ForEach tylko get
+        public void ForEachOnPixel(Action<ShortARGB> func)
+        {
+            ForEach(func);
+        }
+
+        // ForEach set, zwraca klon poprzedniego obiektu
         public ImagePixels ForEachOnPixel(Func<ShortARGB, ShortARGB> func)
         {
             var clone = new ImagePixels(this);
 
-            clone.ForEach(func);
+            clone.ForEachAndSet(func);
 
             return clone;
         }
 
-
+        // Konwersja do BitmapSource
         public BitmapSource ToBitmapSource()
         {
             return ToBitmapSource(ShortToByte);
         }
 
+
+        // Konwersja do bitmap source z własną funkcją do konwersj short na byte
         public BitmapSource ToBitmapSource(Func<short, byte> FromIntToByteConventer)
         {
             if (Bits == null)
@@ -84,8 +98,14 @@ namespace ImageManipulator
 
             return img;
         }
+        private void ForEach(Action<ShortARGB> func)
+        {
+            for (long y = 0; y < Height; y++)
+                for (long x = 0; x < Width; x++)
+                    func(GetPixel(x, y));
+        }
 
-        private void ForEach(Func<ShortARGB, ShortARGB> func)
+        private void ForEachAndSet(Func<ShortARGB, ShortARGB> func)
         {
             for (long y = 0; y < Height; y++)
                 for (long x = 0; x < Width; x++)
@@ -108,7 +128,9 @@ namespace ImageManipulator
         private ShortARGB GetPixel(long x, long y)
         {
             var step = CalcualteStep(x,y);
-            return new ShortARGB(Pixels[step+3],Pixels[step+2],Pixels[step+1],Pixels[step]);
+            if(Pixels != null)
+                return new ShortARGB(Pixels[step+3], Pixels[step+2], Pixels[step+1], Pixels[step]);
+            return new ShortARGB(Bits[step+3], Bits[step+2], Bits[step+1], Bits[step]);
         }
 
         private void SetPixel(long x, long y, ShortARGB color)
