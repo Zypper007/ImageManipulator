@@ -23,8 +23,8 @@ namespace ImageManipulator
     public partial class MainWindow : Window, INotifyPropertyChanged
     {
         #region Property
-        HistoryService<Tuple<ImagePixels, ImageStatistic>> _history;
-        HistoryService<Tuple<ImagePixels, ImageStatistic>> History
+        HistoryService<Tuple<ImagePixels, ImageStatistic, double, double>> _history;
+        HistoryService<Tuple<ImagePixels, ImageStatistic, double, double>> History
         {
             get => _history;
             set
@@ -39,15 +39,15 @@ namespace ImageManipulator
         private ImageStatistic imageStatistic => History.CurrentState.Item2;
 
         // Funkcja ułatwiająca dodawanie nowych elementów
-        private void PushNewState(Tuple<ImagePixels, ImageStatistic> t)
+        private void PushNewState(Tuple<ImagePixels, ImageStatistic, double, double> t)
         {
             History.NewState(t);
             _subject.OnNext(t);
         }
 
         // Zostosowanie wzorca Obserwator
-        Subject<Tuple<ImagePixels, ImageStatistic>> _subject;
-        IObserver<Tuple<ImagePixels, ImageStatistic>> _observer;
+        Subject<Tuple<ImagePixels, ImageStatistic, double, double>> _subject;
+        IObserver<Tuple<ImagePixels, ImageStatistic, double, double>> _observer;
 
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -63,6 +63,9 @@ namespace ImageManipulator
             }
         }
 
+        // zmienne do ustawiania suwaków
+        private double brith_delta = 0;
+        private double contr_delta = 0;
         private double lastContrastValue = 0;
         private double lastBrithnessValue = 0;
         // ostatnia lokalizacja pliku;
@@ -73,12 +76,14 @@ namespace ImageManipulator
         {
             InitializeComponent();
 
-            _subject = new Subject<Tuple<ImagePixels, ImageStatistic>>();
-            _observer = Observer.Create<Tuple<ImagePixels, ImageStatistic>>( (x) => 
+            _subject = new Subject<Tuple<ImagePixels, ImageStatistic, double, double>>();
+            _observer = Observer.Create<Tuple<ImagePixels, ImageStatistic, double, double>>( (x) => 
             {
                 Dispatcher.Invoke(() => { 
                     ImgControl.Source = x.Item1.ToBitmapSource();
                     DrawHistogram(x.Item2.Histogram);
+                    SliderJasnosc.Value = x.Item3;
+                    SliderKontrast.Value = x.Item4;
                     Processing = false;
                 });
             });
@@ -114,11 +119,11 @@ namespace ImageManipulator
 
                     var imagePixels = new ImagePixels(img);
                     var statistic = new ImageStatistic(imagePixels);
-                    var tuple = new Tuple<ImagePixels, ImageStatistic>(imagePixels, statistic);
+                    var tuple = Tuple.Create(imagePixels, statistic, brith_delta, contr_delta);
 
                     if (History == null)
                     {
-                        History = new HistoryService<Tuple<ImagePixels, ImageStatistic>>(tuple, 20);
+                        History = new HistoryService<Tuple<ImagePixels, ImageStatistic, double, double>>(tuple, 5);
                         History.CanUndoEvent += History_CanUndoEvent;
                         History.CanRedoEvent += History_CanRedoEvent;
                     }
@@ -148,8 +153,8 @@ namespace ImageManipulator
         private void SliderJasnosc_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             var value = Math.Round((sender as Slider).Value);
-            var brith_val = (short)Math.Round(value - lastBrithnessValue);
-            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => ImageFunctions.Brightness(x, brith_val);
+            brith_delta = (short)Math.Round(value - lastBrithnessValue);
+            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => ImageFunctions.Brightness(x, (short)brith_delta);
             ImageManipulation(fn);
             lastBrithnessValue = value;
         }
@@ -157,8 +162,8 @@ namespace ImageManipulator
         private void SliderKontrast_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
         {
             var value = (sender as Slider).Value;
-            var contr_val = (short)Math.Round(value- lastContrastValue);
-            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => ImageFunctions.Contrast(x, contr_val);
+            contr_delta = Math.Round(value- lastContrastValue);
+            Func<ShortARGB, ShortARGB> fn = (ShortARGB x) => ImageFunctions.Contrast(x, (short)contr_delta);
             ImageManipulation(fn);
             lastContrastValue = value;
         }
@@ -170,7 +175,7 @@ namespace ImageManipulator
             Task.Run(() => {
                 var imgPx = imagePixels.ForEachOnPixel(manipulator);
                 var statistic = new ImageStatistic(imagePixels);
-                PushNewState(new Tuple<ImagePixels, ImageStatistic>(imgPx, statistic));
+                PushNewState(Tuple.Create(imgPx, statistic, brith_delta, contr_delta));
             });
         }
         #endregion

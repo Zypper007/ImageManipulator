@@ -9,34 +9,40 @@ namespace ImageManipulator
 
         T[] _Stack;
 
-        private int _stackPointer = 0;
-        private int StackPointer
+        // HistoryPointer pokazuje gdzie ma wstawiać nowe elementy
+        private int _historyPointer = 0;
+        private int HistoryPointer
         {
-            get => _stackPointer;
+            get => _historyPointer;
             set
             {
                 if (value >= _Stack.Length)
-                    _stackPointer = value - _Stack.Length;
-                else _stackPointer = value;
+                    _historyPointer = value - _Stack.Length;
+                else if (value < 0)
+                    _historyPointer = value + _Stack.Length;
+                else _historyPointer = value;
             }
         }
 
-        private int _stateCounter = 0;
-        private int StateCounter
+        public T CurrentState { get; private set; }
+
+        // Zwraca liczbę możliwych cofnięć
+        // nie może być wyższy niż rozmiar tablicy
+        private int _undoCount = 0;
+        public int UndoCount
         {
-            get => _stateCounter;
+            get => _undoCount;
             set
             {
                 if (value > _Stack.Length)
-                    _stateCounter = _Stack.Length;
-                else _stateCounter = value;
+                    _undoCount = _Stack.Length;
+                else _undoCount = value;
             }
         }
 
+        // Zwraca liczbę możliwych przejść dalej
+        public int RedoCount { get; private set; } = 0;
 
-        public T CurrentState { get; private set; }
-        public int UndoCount => StackPointer;
-        public int RedoCount => StateCounter - StackPointer;
         public bool CanUndo => (UndoCount > 0) ? true : false;
         public bool CanRedo => (RedoCount > 0) ? true : false;
         
@@ -53,20 +59,24 @@ namespace ImageManipulator
 
         public void NewState(T entity)
         {
-            _Stack[StackPointer] = CurrentState;
-            StateCounter++;
-            StackPointer++;
+            _Stack[HistoryPointer] = CurrentState;
+            HistoryPointer++;
+            UndoCount++;
+            RedoCount = 0;
             CurrentState = entity;
             OnPropertyChangeCanUndo();
+            OnPropertyChangeCanRedo();
         }
 
         public T Undo()
         {
             if (CanUndo)
             {
-                _Stack[StackPointer] = CurrentState;
-                StackPointer--;
-                var entity = _Stack[StackPointer];
+                _Stack[HistoryPointer] = CurrentState;
+                HistoryPointer--;
+                UndoCount--;
+                RedoCount++;
+                var entity = _Stack[HistoryPointer];
                 CurrentState = entity;
                 OnPropertyChangeCanUndo();
                 OnPropertyChangeCanRedo();
@@ -79,8 +89,10 @@ namespace ImageManipulator
         {
             if(CanRedo)
             {
-                StackPointer++;
-                var entity = _Stack[StackPointer];
+                HistoryPointer++;
+                var entity = _Stack[HistoryPointer];
+                RedoCount--;
+                UndoCount++;
                 CurrentState = entity;
                 OnPropertyChangeCanUndo();
                 OnPropertyChangeCanRedo();
